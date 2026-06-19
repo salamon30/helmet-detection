@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 import av
 import cv2
 import numpy as np
+import plotly.graph_objects as go
 import streamlit as st
 from PIL import Image
 from streamlit_webrtc import VideoProcessorBase, WebRtcMode, webrtc_streamer
@@ -14,7 +15,6 @@ from ultralytics import YOLO
 
 MODEL_PATH = Path(__file__).parent / "helmet_v3_best.pt"
 
-# Supports both naming conventions: "head" (v1/v2) and "no_helmet" (Berke v3+)
 HELMET_CLASSES = {"helmet", "Helmet"}
 NO_HELMET_CLASSES = {"head", "no_helmet", "No_Helmet"}
 
@@ -26,6 +26,15 @@ CLASS_COLORS: Dict[str, Tuple[int, int, int]] = {
     "No_Helmet": (220, 38, 38),
 }
 
+# Training curve data extracted from Colab log (50 epochs, mAP50)
+TRAIN_MAP50 = [
+    0.740, 0.753, 0.829, 0.840, 0.843, 0.871, 0.866, 0.880, 0.876, 0.897,
+    0.908, 0.883, 0.908, 0.907, 0.915, 0.899, 0.918, 0.916, 0.914, 0.920,
+    0.924, 0.929, 0.930, 0.933, 0.934, 0.929, 0.933, 0.938, 0.939, 0.936,
+    0.934, 0.940, 0.938, 0.942, 0.940, 0.945, 0.942, 0.943, 0.945, 0.943,
+    0.940, 0.944, 0.949, 0.946, 0.946, 0.942, 0.948, 0.949, 0.948, 0.949,
+]
+
 # ─── Page Config ──────────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -34,7 +43,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ─── Styles ───────────────────────────────────────────────────────────────────
 
 def inject_styles() -> None:
     st.markdown(
@@ -51,11 +60,38 @@ def inject_styles() -> None:
             .compliance-safe   { color: #16a34a; font-weight: 700; font-size: 1.5rem; text-align: center; }
             .compliance-warn   { color: #d97706; font-weight: 700; font-size: 1.5rem; text-align: center; }
             .compliance-danger { color: #dc2626; font-weight: 700; font-size: 1.5rem; text-align: center; }
+
+            @keyframes pulse-red {
+                0%   { background-color: #fee2e2; border-color: #dc2626; }
+                50%  { background-color: #fca5a5; border-color: #991b1b; }
+                100% { background-color: #fee2e2; border-color: #dc2626; }
+            }
+            .alarm-banner {
+                animation: pulse-red 1s ease-in-out infinite;
+                border: 3px solid #dc2626;
+                border-radius: 12px;
+                padding: 1rem 1.5rem;
+                margin-bottom: 1rem;
+                text-align: center;
+            }
+            .alarm-title {
+                font-size: 1.6rem;
+                font-weight: 800;
+                color: #991b1b;
+                letter-spacing: 0.05em;
+            }
+            .alarm-sub {
+                font-size: 1rem;
+                color: #7f1d1d;
+                margin-top: 0.25rem;
+            }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _compliance_css(rate: float) -> str:
     if rate >= 0.9:
@@ -78,7 +114,6 @@ def draw_detections(
     frame: np.ndarray,
     detections: List[Tuple[int, int, int, int, float, str]],
 ) -> Tuple[np.ndarray, Dict[str, int]]:
-    """Draw bounding boxes and return per-class counts."""
     counts: Dict[str, int] = {"helmet": 0, "head": 0}
     output = frame.copy()
 
@@ -105,13 +140,30 @@ def draw_detections(
     return output, counts
 
 
+def _show_alarm(rate: float) -> None:
+    if rate < 0.5:
+        st.markdown(
+            f"""
+            <div class="alarm-banner">
+                <div class="alarm-title">⚠️ COMPLIANCE ALARM</div>
+                <div class="alarm-sub">
+                    Helmet compliance is critically low: <strong>{rate:.0%}</strong> — immediate action required!
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def _show_metrics(counts: Dict[str, int]) -> None:
     helmets = counts.get("helmet", 0)
     heads   = counts.get("head", 0)
     total   = helmets + heads
     rate    = helmets / total if total > 0 else 0.0
-    css     = _compliance_css(rate)
 
+    _show_alarm(rate)
+
+    css = _compliance_css(rate)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Helmet ✅", helmets)
     c2.metric("No Helmet ⚠️", heads)
@@ -126,7 +178,6 @@ def _show_metrics(counts: Dict[str, int]) -> None:
 def predict_frame(
     model: YOLO, frame: np.ndarray, conf_threshold: float
 ) -> Tuple[np.ndarray, Dict[str, int]]:
-    """Run inference on a single BGR frame and return annotated frame + counts."""
     results = model.predict(source=frame, conf=conf_threshold, verbose=False)
     result = results[0]
     names = result.names
@@ -232,6 +283,15 @@ def video_mode(model: YOLO, conf_threshold: float) -> None:
 
     st.success("Processing complete.")
     st.video(out_path)
+
+    with open(out_path, "rb") as f:
+        st.download_button(
+            label="Download annotated video",
+            data=f,
+            file_name="helmet_detection_output.mp4",
+            mime="video/mp4",
+        )
+
     st.markdown("**Peak counts (single frame)**")
     _show_metrics(max_counts)
 
@@ -253,51 +313,151 @@ def webcam_mode(conf_threshold: float) -> None:
         _show_metrics(webrtc_ctx.video_processor.latest_counts)
 
 
+# ─── Model Analysis Tab ───────────────────────────────────────────────────────
+
+def model_analysis_tab() -> None:
+    st.markdown("## Model Performance")
+
+    # ── Metrics cards ──
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("#### Overall")
+        st.metric("mAP50",    "94.9%")
+        st.metric("mAP50-95", "61.5%")
+        st.metric("Precision", "92.4%")
+        st.metric("Recall",    "90.2%")
+
+    with col2:
+        st.markdown("#### 🟢 Helmet")
+        st.metric("mAP50",    "96.1%")
+        st.metric("mAP50-95", "61.8%")
+        st.metric("Precision", "93.7%")
+        st.metric("Recall",    "92.1%")
+
+    with col3:
+        st.markdown("#### 🔴 No Helmet")
+        st.metric("mAP50",    "93.7%")
+        st.metric("mAP50-95", "61.2%")
+        st.metric("Precision", "91.1%")
+        st.metric("Recall",    "88.3%")
+
+    st.divider()
+
+    # ── Training curve ──
+    st.markdown("#### Training Curve — mAP50 over 50 Epochs")
+
+    epochs = list(range(1, 51))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=epochs,
+        y=TRAIN_MAP50,
+        mode="lines+markers",
+        name="mAP50",
+        line=dict(color="#6366f1", width=2.5),
+        marker=dict(size=4),
+        hovertemplate="Epoch %{x}<br>mAP50: %{y:.3f}<extra></extra>",
+    ))
+    fig.add_hline(
+        y=0.949,
+        line_dash="dash",
+        line_color="#16a34a",
+        annotation_text="Best: 0.949",
+        annotation_position="top right",
+    )
+    fig.update_layout(
+        xaxis_title="Epoch",
+        yaxis_title="mAP50",
+        yaxis=dict(range=[0.70, 0.98]),
+        height=380,
+        margin=dict(l=20, r=20, t=20, b=20),
+        hovermode="x unified",
+        plot_bgcolor="#f9fafb",
+        paper_bgcolor="#ffffff",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+
+    # ── Training config ──
+    st.markdown("#### Training Configuration")
+    c1, c2, c3 = st.columns(3)
+    c1.markdown("""
+| Parameter | Value |
+|-----------|-------|
+| Model | YOLOv8s |
+| Epochs | 50 |
+| Image size | 640 |
+| Batch size | 16 |
+""")
+    c2.markdown("""
+| Parameter | Value |
+|-----------|-------|
+| Optimizer | AdamW |
+| LR₀ | 0.001667 |
+| Patience | 10 |
+| GPU | Tesla T4 |
+""")
+    c3.markdown("""
+| Dataset | Images |
+|---------|--------|
+| Kaggle hard-hat | ~5 000 |
+| Roboflow PPE | ~1 200 |
+| **Total** | **6 176** |
+| Train / Val / Test | 70/20/10% |
+""")
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     inject_styles()
 
-    st.markdown('<div class="main-title">🪖 Helmet Detection</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">🪖 Helmet Detection Dashboard</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="subtitle">YOLOv8 · Real-time PPE compliance for construction sites — images, videos & webcam</div>',
+        '<div class="subtitle">YOLOv8s · Real-time PPE compliance for construction sites</div>',
         unsafe_allow_html=True,
     )
 
-    if not MODEL_PATH.exists():
-        st.error(f"Model not found: `{MODEL_PATH}`. Place `best.pt` in the `models/` folder.")
-        st.stop()
+    tab_detect, tab_analysis = st.tabs(["Detection", "Model Analysis"])
 
-    with st.sidebar:
-        st.markdown("## ⚙️ Settings")
-        conf_threshold = st.slider(
-            "Confidence threshold",
-            min_value=0.10,
-            max_value=0.95,
-            value=0.55,
-            step=0.05,
-            help="Raise to reduce false positives. 0.55 is a good starting point.",
-        )
-        mode = st.radio(
-            "Mode",
-            options=["Image", "Video", "Webcam"],
-            captions=["Upload a photo", "Upload a video clip", "Real-time camera"],
-        )
-        st.markdown("---")
-        st.markdown("**Legend**")
-        st.markdown("🟢 `helmet` — PPE compliant")
-        st.markdown("🔴 `head` — No helmet")
-        st.markdown("---")
-        st.caption(f"Model: `{MODEL_PATH.name}`")
+    with tab_detect:
+        if not MODEL_PATH.exists():
+            st.error(f"Model not found: `{MODEL_PATH}`.")
+            st.stop()
 
-    model = load_model(str(MODEL_PATH))
+        with st.sidebar:
+            st.markdown("## ⚙️ Settings")
+            conf_threshold = st.slider(
+                "Confidence threshold",
+                min_value=0.10,
+                max_value=0.95,
+                value=0.55,
+                step=0.05,
+            )
+            mode = st.radio(
+                "Mode",
+                options=["Image", "Video", "Webcam"],
+                captions=["Upload a photo", "Upload a video clip", "Real-time camera"],
+            )
+            st.markdown("---")
+            st.markdown("**Legend**")
+            st.markdown("🟢 `helmet` — PPE compliant")
+            st.markdown("🔴 `head` — No helmet")
+            st.markdown("---")
+            st.caption(f"Model: `{MODEL_PATH.name}`")
 
-    if mode == "Image":
-        image_mode(model, conf_threshold)
-    elif mode == "Video":
-        video_mode(model, conf_threshold)
-    else:
-        webcam_mode(conf_threshold)
+        model = load_model(str(MODEL_PATH))
+
+        if mode == "Image":
+            image_mode(model, conf_threshold)
+        elif mode == "Video":
+            video_mode(model, conf_threshold)
+        else:
+            webcam_mode(conf_threshold)
+
+    with tab_analysis:
+        model_analysis_tab()
 
 
 if __name__ == "__main__":
