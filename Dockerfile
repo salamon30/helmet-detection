@@ -7,7 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-api.txt .
-RUN pip install --no-cache-dir -r requirements-api.txt
+RUN pip install --no-cache-dir --timeout 600 --retries 5 \
+    torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir --timeout 600 --retries 5 \
+    -r requirements-api.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 COPY helmet_v3_best.pt .
 COPY api/ ./api/
