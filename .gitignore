@@ -1,6 +1,7 @@
 venv/
 __pycache__/
 *.pt
+!helmet_v3_best.pt
 *.pyc
 .DS_Store
 models/
