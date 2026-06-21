@@ -1,91 +1,105 @@
-# Helmet Detection Dashboard
+# 🪖 Helmet Detection — PPE Compliance System
 
-## Live API
-**Base URL:** `https://helmet-detection-6kf7.onrender.com`
+Real-time helmet detection for construction sites using YOLOv8s. Detects whether workers are wearing helmets and tracks compliance rate.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Service health check |
-| `/predict` | POST | Run helmet detection on an image |
-| `/docs` | GET | Interactive Swagger UI |
+## Live Demo
 
-**Quick test:**
+| | URL |
+|--|--|
+| **Streamlit Dashboard** | [helmet-streamlit.onrender.com](https://helmet-streamlit.onrender.com) |
+| **REST API** | [helmet-detection-6kf7.onrender.com/docs](https://helmet-detection-6kf7.onrender.com/docs) |
+
+> Free tier — first request may take ~30 seconds to wake up.
+
+## Model Performance
+
+| Class | Precision | Recall | mAP50 |
+|-------|-----------|--------|-------|
+| Helmet | 93.7% | 92.1% | 96.1% |
+| No_Helmet | 91.1% | 88.3% | 93.7% |
+| **Overall** | **92.4%** | **90.2%** | **94.9%** |
+
+- Architecture: YOLOv8s (pretrained on ImageNet)
+- Dataset: 6176 images — Kaggle hard-hat-detection + Roboflow PPE
+- Training: Google Colab, Tesla T4 GPU, 50 epochs
+- Inference speed: ~103 FPS
+
+## Features
+
+- Image upload — helmet detection on photos
+- Video upload — frame-by-frame processing + download annotated video
+- Live webcam — real-time detection via browser
+- Compliance alarm — visual alert when compliance drops below 50%
+- Model Analysis tab — training curves, per-class metrics
+
+## API Usage
+
 ```bash
+# Health check
+curl https://helmet-detection-6kf7.onrender.com/health
+
+# Run detection on an image
 curl -X POST https://helmet-detection-6kf7.onrender.com/predict \
   -F "file=@your_image.jpg"
 ```
 
-> Note: Free tier spins down after inactivity — first request may take ~30 seconds.
+**Example response:**
+```json
+{
+  "detections": [
+    {"label": "helmet", "confidence": 0.92, "bbox": {"x1": 100, "y1": 50, "x2": 200, "y2": 150}},
+    {"label": "no_helmet", "confidence": 0.85, "bbox": {"x1": 300, "y1": 60, "x2": 380, "y2": 140}}
+  ],
+  "counts": {"helmet": 1, "no_helmet": 1},
+  "total": 2,
+  "compliance_rate": 0.5
+}
+```
 
-Real-time PPE (Personal Protective Equipment) helmet detection using YOLOv8s. Detects whether workers are wearing helmets on construction sites.
+## Project Structure
 
-## Features
+```
+helmet-detection/
+├── app.py                   # Streamlit dashboard
+├── api/
+│   ├── main.py              # FastAPI app (/health, /predict)
+│   └── inference.py         # YOLOv8 inference module
+├── notebooks/
+│   ├── train_yolov8.ipynb       # YOLOv8s training (Colab)
+│   └── train_faster_rcnn.ipynb  # Faster R-CNN training (Colab)
+├── Dockerfile               # API container
+├── Dockerfile.streamlit     # Streamlit container
+├── requirements.txt         # Streamlit dependencies
+├── requirements-api.txt     # API dependencies
+└── helmet_v3_best.pt        # Trained model weights
+```
 
-- **Image upload** — detect helmets in photos
-- **Video upload** — process video files frame by frame
-- **Live webcam** — real-time detection via browser camera
-- **Compliance tracking** — shows helmet/no-helmet counts and compliance rate
-
-## Model
-
-- Architecture: YOLOv8s
-- Dataset: 6177 images (Kaggle hard-hat-detection + Roboflow PPE dataset)
-- mAP50: **0.949**
-- Classes: `Helmet`, `No_Helmet`
-
-## Setup
-
-### 1. Clone the repository
+## Local Setup
 
 ```bash
 git clone https://github.com/salamon30/helmet-detection.git
 cd helmet-detection
-```
-
-### 2. Create virtual environment
-
-```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+./run.sh
 ```
 
-### 3. Download the model
-
-Download `helmet_v3_best.pt` and place it in the project folder:
-
-```
-helmet-detection/
-├── app.py
-├── requirements.txt
-├── helmet_v3_best.pt   ← place here
-└── README.md
-```
-
-> The model is not included in the repository due to file size. Train your own using the Colab notebook or request the file from the project owner.
-
-### 4. Run the app
+## Docker
 
 ```bash
-streamlit run app.py
-```
+# Build and run API
+docker build -t helmet-api .
+docker run -p 8000:8000 helmet-api
 
-Open [http://localhost:8501](http://localhost:8501) in your browser.
+# Build and run Streamlit
+docker build -f Dockerfile.streamlit -t helmet-streamlit .
+docker run -p 8501:8501 helmet-streamlit
+```
 
 ## Training
 
-The model was trained on Google Colab with Tesla T4 GPU using:
+Colab notebooks are in `notebooks/`. Update your Kaggle API key and Drive paths before running.
 
-- Base model: `yolov8s.pt`
-- Epochs: 50
-- Image size: 640
-- Batch size: 16
-- Early stopping patience: 10
-
-## Results
-
-| Class | Precision | Recall | mAP50 |
-|-------|-----------|--------|-------|
-| Helmet | 0.937 | 0.921 | 0.961 |
-| No_Helmet | 0.911 | 0.883 | 0.937 |
-| **Overall** | **0.924** | **0.902** | **0.949** |
+- [YOLOv8s notebook](notebooks/train_yolov8.ipynb)
+- [Faster R-CNN notebook](notebooks/train_faster_rcnn.ipynb)
