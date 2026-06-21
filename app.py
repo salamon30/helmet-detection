@@ -46,49 +46,7 @@ st.set_page_config(
 # ─── Styles ───────────────────────────────────────────────────────────────────
 
 def inject_styles() -> None:
-    st.markdown(
-        """
-        <style>
-            .main-title { font-size: 2.0rem; font-weight: 700; margin-bottom: 0.25rem; }
-            .subtitle { color: #6b7280; margin-bottom: 1rem; }
-            .block-card {
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 1rem 1.1rem;
-                background: #ffffff;
-            }
-            .compliance-safe   { color: #16a34a; font-weight: 700; font-size: 1.5rem; text-align: center; }
-            .compliance-warn   { color: #d97706; font-weight: 700; font-size: 1.5rem; text-align: center; }
-            .compliance-danger { color: #dc2626; font-weight: 700; font-size: 1.5rem; text-align: center; }
-
-            @keyframes pulse-red {
-                0%   { background-color: #fee2e2; border-color: #dc2626; }
-                50%  { background-color: #fca5a5; border-color: #991b1b; }
-                100% { background-color: #fee2e2; border-color: #dc2626; }
-            }
-            .alarm-banner {
-                animation: pulse-red 1s ease-in-out infinite;
-                border: 3px solid #dc2626;
-                border-radius: 12px;
-                padding: 1rem 1.5rem;
-                margin-bottom: 1rem;
-                text-align: center;
-            }
-            .alarm-title {
-                font-size: 1.6rem;
-                font-weight: 800;
-                color: #991b1b;
-                letter-spacing: 0.05em;
-            }
-            .alarm-sub {
-                font-size: 1rem;
-                color: #7f1d1d;
-                margin-top: 0.25rem;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    pass
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -142,17 +100,7 @@ def draw_detections(
 
 def _show_alarm(rate: float) -> None:
     if rate < 0.5:
-        st.markdown(
-            f"""
-            <div class="alarm-banner">
-                <div class="alarm-title">⚠️ COMPLIANCE ALARM</div>
-                <div class="alarm-sub">
-                    Helmet compliance is critically low: <strong>{rate:.0%}</strong> — immediate action required!
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.error(f"⚠️ COMPLIANCE ALARM — Helmet compliance is critically low: {rate:.0%} — immediate action required!")
 
 
 def _show_metrics(counts: Dict[str, int]) -> None:
@@ -168,11 +116,7 @@ def _show_metrics(counts: Dict[str, int]) -> None:
     c1.metric("Helmet ✅", helmets)
     c2.metric("No Helmet ⚠️", heads)
     c3.metric("Total", total)
-    c4.markdown(
-        f'<p style="font-size:.75rem;color:#6b7280;margin:0">COMPLIANCE</p>'
-        f'<p class="{css}">{rate:.0%}</p>',
-        unsafe_allow_html=True,
-    )
+    c4.metric("COMPLIANCE", f"{rate:.0%}")
 
 
 def predict_frame(
@@ -413,11 +357,8 @@ def model_analysis_tab() -> None:
 def main() -> None:
     inject_styles()
 
-    st.markdown('<div class="main-title">🪖 Helmet Detection Dashboard</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="subtitle">YOLOv8s · Real-time PPE compliance for construction sites</div>',
-        unsafe_allow_html=True,
-    )
+    st.title("🪖 Helmet Detection Dashboard")
+    st.caption("YOLOv8s · Real-time PPE compliance for construction sites")
 
     tab_detect, tab_analysis = st.tabs(["Detection", "Model Analysis"])
 
