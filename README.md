@@ -1,5 +1,22 @@
 # Helmet Detection Dashboard
 
+## Live API
+**Base URL:** `https://helmet-detection-6kf7.onrender.com`
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Service health check |
+| `/predict` | POST | Run helmet detection on an image |
+| `/docs` | GET | Interactive Swagger UI |
+
+**Quick test:**
+```bash
+curl -X POST https://helmet-detection-6kf7.onrender.com/predict \
+  -F "file=@your_image.jpg"
+```
+
+> Note: Free tier spins down after inactivity — first request may take ~30 seconds.
+
 Real-time PPE (Personal Protective Equipment) helmet detection using YOLOv8s. Detects whether workers are wearing helmets on construction sites.
 
 ## Features
