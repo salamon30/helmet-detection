@@ -240,6 +240,23 @@ def video_mode(model: YOLO, conf_threshold: float) -> None:
     _show_metrics(max_counts)
 
 
+RTC_CONFIGURATION = {
+    "iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {
+            "urls": ["turn:openrelay.metered.ca:80"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": ["turn:openrelay.metered.ca:443"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+    ]
+}
+
+
 def webcam_mode(conf_threshold: float) -> None:
     st.markdown("### Live webcam detection")
     st.caption("Grant camera access in your browser, then press **Start**.")
@@ -247,6 +264,7 @@ def webcam_mode(conf_threshold: float) -> None:
     webrtc_ctx = webrtc_streamer(
         key="helmet-webcam",
         mode=WebRtcMode.SENDRECV,
+        rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=HelmetVideoProcessor,
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True,
