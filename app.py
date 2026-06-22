@@ -259,6 +259,7 @@ RTC_CONFIGURATION = {
 
 def webcam_mode(conf_threshold: float) -> None:
     st.markdown("### Live webcam detection")
+    st.info("**Cloud limitation:** WebRTC is not supported on the hosted version. To use webcam detection, run the app locally with `./run.sh` and open `localhost:8501`.")
     st.caption("Grant camera access in your browser, then press **Start**.")
 
     webrtc_ctx = webrtc_streamer(
