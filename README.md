@@ -1,5 +1,7 @@
 # 🪖 Helmet Detection — PPE Compliance System
 
+[![CI/CD](https://github.com/salamon30/helmet-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/salamon30/helmet-detection/actions/workflows/ci.yml)
+
 Real-time helmet detection for construction sites using YOLOv8s. Detects whether workers are wearing helmets and tracks compliance rate.
 
 ## Live Demo
