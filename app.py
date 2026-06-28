@@ -200,41 +200,54 @@ def video_mode(model: YOLO, conf_threshold: float) -> None:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as out_tmp:
         out_path = out_tmp.name
 
-    writer = cv2.VideoWriter(
-        out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
-    )
+    out_container = av.open(out_path, "w")
+    stream = out_container.add_stream("h264", rate=int(fps))
+    stream.width = width
+    stream.height = height
+    stream.pix_fmt = "yuv420p"
 
     progress = st.progress(0)
     status   = st.empty()
     max_counts: Dict[str, int] = {"helmet": 0, "head": 0}
+    frame_idx = 0
 
-    for idx in range(1, total + 1 if total > 0 else int(1e9)):
+    while True:
         ok, frame = cap.read()
         if not ok:
             break
+        frame_idx += 1
         annotated, counts = predict_frame(model, frame, conf_threshold)
-        writer.write(annotated)
         max_counts["helmet"] = max(max_counts["helmet"], counts.get("helmet", 0))
         max_counts["head"]   = max(max_counts["head"],   counts.get("head",   0))
-        if total > 0:
-            progress.progress(min(idx / total, 1.0))
-        status.text(f"Processing frame {idx}/{total if total > 0 else '?'}")
 
+        rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+        av_frame = av.VideoFrame.from_ndarray(rgb, format="rgb24")
+        av_frame = av_frame.reformat(format="yuv420p")
+        for packet in stream.encode(av_frame):
+            out_container.mux(packet)
+
+        if total > 0:
+            progress.progress(min(frame_idx / total, 1.0))
+        status.text(f"Processing frame {frame_idx}/{total if total > 0 else '?'}")
+
+    for packet in stream.encode():
+        out_container.mux(packet)
+    out_container.close()
     cap.release()
-    writer.release()
     progress.empty()
     status.empty()
 
     st.success("Processing complete.")
-    st.video(out_path)
-
     with open(out_path, "rb") as f:
-        st.download_button(
-            label="Download annotated video",
-            data=f,
-            file_name="helmet_detection_output.mp4",
-            mime="video/mp4",
-        )
+        video_bytes = f.read()
+    st.video(video_bytes)
+
+    st.download_button(
+        label="Download annotated video",
+        data=video_bytes,
+        file_name="helmet_detection_output.mp4",
+        mime="video/mp4",
+    )
 
     st.markdown("**Peak counts (single frame)**")
     _show_metrics(max_counts)
