@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image
 from streamlit_webrtc import VideoProcessorBase, WebRtcMode, webrtc_streamer
 from ultralytics import YOLO
@@ -98,9 +99,58 @@ def draw_detections(
     return output, counts
 
 
+def _alarm_component(active: bool) -> None:
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            const p = window.parent;
+
+            function beep() {{
+                try {{
+                    if (!p._alarmCtx) {{
+                        p._alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }}
+                    const ctx = p._alarmCtx;
+                    [880, 660, 880].forEach(function(freq, i) {{
+                        const osc  = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'square';
+                        osc.frequency.value = freq;
+                        const t = ctx.currentTime + i * 0.3;
+                        gain.gain.setValueAtTime(0.35, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+                        osc.start(t);
+                        osc.stop(t + 0.25);
+                    }});
+                }} catch(e) {{ console.warn('alarm beep failed', e); }}
+            }}
+
+            if ({str(active).lower()}) {{
+                if (!p._helmetAlarmRunning) {{
+                    p._helmetAlarmRunning = true;
+                    beep();
+                    p._helmetAlarmTimer = setInterval(beep, 2000);
+                }}
+            }} else {{
+                if (p._helmetAlarmRunning) {{
+                    clearInterval(p._helmetAlarmTimer);
+                    p._helmetAlarmRunning = false;
+                }}
+            }}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def _show_alarm(rate: float) -> None:
     if rate < 0.5:
         st.error(f"⚠️ COMPLIANCE ALARM — Helmet compliance is critically low: {rate:.0%} — immediate action required!")
+    _alarm_component(rate < 0.5)
 
 
 def _show_metrics(counts: Dict[str, int]) -> None:
